@@ -3,14 +3,15 @@ import time
 import shift
 from components.market_maker_one import market_maker_one
 import threading
+import credentials
 import utils
 from components.routine_summary import routine_summary
 
 
 def main(argv):
-    trader = shift.Trader("test001")
+    trader = shift.Trader(credentials.my_username)
     try:
-        trader.connect("initiator.cfg", "password")
+        trader.connect("initiator.cfg", credentials.my_password)
         trader.sub_all_order_book()
     except shift.IncorrectPasswordError as e:
         print(e)
