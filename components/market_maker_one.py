@@ -44,8 +44,8 @@ def market_maker_one(trader: shift.Trader, ticker: str):
     endTime = dt.time(15,50,0)
     dayEnd = dt.datetime.combine(today,endTime)
     rightNow =  trader.get_last_trade_time() 
-    print(today)
-    print(dayEnd)
+
+    #right < the end of day at 3:50
     while today < dayEnd:
 
         '''
@@ -59,12 +59,17 @@ def market_maker_one(trader: shift.Trader, ticker: str):
         limitBuyPrice = lastPrice - tickSize
         limitSellPrice = lastPrice + tickSize
 
-        limit_buy = shift.Order(shift.Order.Type.LIMIT_BUY, "AAPL", 100, limitBuyPrice)
-        limit_sell = shift.Order(shift.Order.Type.LIMIT_SELL, "AAPL", 100, limitSellPrice)
+        limit_buy = shift.Order(shift.Order.Type.LIMIT_BUY, "AAPL", 2, limitBuyPrice)
+        limit_sell = shift.Order(shift.Order.Type.LIMIT_SELL, "AAPL", 1, limitSellPrice)
+
+        # market_buy = shift.Order(shift.Order.Type.MARKET_BUY, "AAPL", 1)
+        # trader.submit_order(market_buy)
 
         trader.submit_order(limit_buy)
         trader.submit_order(limit_sell)
 
+
+        time.sleep(10)
         
     return
         # print_portfolio_information()

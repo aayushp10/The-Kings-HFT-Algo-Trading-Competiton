@@ -80,3 +80,29 @@ def print_portfolio_information(trader: shift.Trader):
         )
 
     return
+
+
+def print_all_submitted_order(trader):
+    print(
+        "Symbol\t\t\t\tType\t  Price\t\tSize\tExecuted\tID\t\t\t\t\t\t\t\t\t\t\t\t\t\t Status\t\tTimestamp"
+    )
+    for o in trader.get_submitted_orders():
+        if o.status == shift.Order.Status.FILLED:
+            price = o.executed_price
+        else:
+            price = o.price
+        print(
+            "%6s\t%16s\t%7.2f\t\t%4d\t\t%4d\t%36s\t%23s\t\t%26s"
+            % (
+                o.symbol,
+                o.type,
+                price,
+                o.size,
+                o.executed_size,
+                o.id,
+                o.status,
+                o.timestamp,
+            )
+        )
+
+    return

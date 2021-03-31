@@ -4,8 +4,11 @@ import shift
 from components.market_maker_one import market_maker_one
 import threading
 import utils
+from components.routine_summary import routine_summary
+
+
 def main(argv):
-    trader = shift.Trader("democlient")
+    trader = shift.Trader("test001")
     try:
         trader.connect("initiator.cfg", "password")
         trader.sub_all_order_book()
@@ -14,17 +17,18 @@ def main(argv):
     except shift.ConnectionTimeoutError as e:
         print(e)
 
-    ticker = "AAPL" 
+    time.sleep(2)
+
+    ticker = "AAPL"
+
     long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
-    # routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+    routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
 
-    # routine_summary_thread.start()
+    routine_summary_thread.start()
     long_and_short_aapl.start()
+
     long_and_short_aapl.join()
-
-    trader.on_portfolio_summary_updated(utils.print_portfolio_information(trader))
-
-    # routine_summary_thread.join()
+    routine_summary_thread.join()
 
     trader.disconnect()
 
