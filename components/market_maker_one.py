@@ -59,7 +59,7 @@ def market_maker_one(trader: shift.Trader, ticker: str):
         limitBuyPrice = lastPrice - tickSize
         limitSellPrice = lastPrice + tickSize
 
-        limit_buy = shift.Order(shift.Order.Type.LIMIT_BUY, "AAPL", 2, limitBuyPrice)
+        limit_buy = shift.Order(shift.Order.Type.LIMIT_BUY, "AAPL", 1, limitBuyPrice)
         limit_sell = shift.Order(shift.Order.Type.LIMIT_SELL, "AAPL", 1, limitSellPrice)
 
         # market_buy = shift.Order(shift.Order.Type.MARKET_BUY, "AAPL", 1)
