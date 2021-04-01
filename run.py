@@ -27,12 +27,9 @@ def main(argv):
     t = threading.Thread(target=que.put(collect_data(trader, ticker)), name='ticker_data_one')
     t.start()
     t.join()
-    result = que.get()
-    print("---RESULT---")
-    print(result)
-    # ticker_data_one_thread = threading.Thread(target=collect_data, args=[trader, ticker], name='ticker_data_one')
-    # ticker_data_one_thread.start()
-    # ticker_data[ticker] = ticker_data_one_thread.join()
+
+    ticker_data[ticker] = que.get()
+
     print(ticker_data)
 
     long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
