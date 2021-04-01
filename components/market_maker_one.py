@@ -37,6 +37,7 @@ def print_submitted_orders(trader: shift.Trader):
     return
 
 
+
 def market_maker_one(trader: shift.Trader, ticker: str):
     tickSize = 0.01
     # james code need to change maybe?
