@@ -8,7 +8,7 @@ import queue
 from components.market_maker_one import market_maker_one
 from components.routine_summary import routine_summary
 from components.data_processor import collect_data
-
+from components.shorter import shorter
 def main(argv):
     trader = shift.Trader(credentials.my_username)
     try:
@@ -30,16 +30,26 @@ def main(argv):
 
     ticker_data[ticker] = que.get()
 
-    print(ticker_data)
+    should_short = ticker_data[ticker].short
+    if should_short:
+        tickers = ["WBA", "CSCO", "BA", "CAT"]
+        short_thread = threading.Thread(target=shorter, args=[trader, tickers], name='shorter_thread')
+        short_thread.start()
+        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+        routine_summary_thread.start()
 
-    long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
-    routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+        short_thread.join()
+        routing_summary_thread.join()
+        
+    else:
+        long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
+        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
 
-    routine_summary_thread.start()
-    long_and_short_aapl.start()
+        routine_summary_thread.start()
+        long_and_short_aapl.start()
 
-    long_and_short_aapl.join()
-    routine_summary_thread.join()
+        long_and_short_aapl.join()
+        routine_summary_thread.join()
 
     trader.disconnect()
 

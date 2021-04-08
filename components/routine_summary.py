@@ -15,4 +15,4 @@ def routine_summary(trader: shift.Trader):
         # utils.print_all_submitted_order(trader)
         utils.print_portfolio_information(trader)
         time.sleep(15)
-    return
+    return 0

@@ -16,14 +16,15 @@ def collect_data(trader: shift.Trader, ticker: str):
         time.sleep(5)
 
     return {
-        prices: prices,
+        "prices": prices,
         **calculate_statistics(prices)
     }
 
 def calculate_statistics(prices):
     variance = statistics.variance(prices)
     return {
-        variance: variance
+        "variance": variance,
+        "short": True
     }
 
 
