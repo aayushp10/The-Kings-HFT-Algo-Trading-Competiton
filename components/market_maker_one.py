@@ -2,7 +2,7 @@ import shift
 import time
 import sys
 import datetime as dt
-
+import numpy as np
 
 def print_submitted_orders(trader: shift.Trader):
 
@@ -74,3 +74,11 @@ def market_maker_one(trader: shift.Trader, ticker: str):
         
     return
         # print_portfolio_information()
+
+
+def calculate_spread(trader: shift.Trader, ticker_data):
+    risk_aversion = -0.95
+    kappa = 2
+    return ticker_data['variance']*risk_aversion + np.log(1 + (risk_aversion/kappa))
+
+
