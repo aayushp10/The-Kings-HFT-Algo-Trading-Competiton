@@ -30,7 +30,7 @@ def main(argv):
 
     ticker_data[ticker] = que.get()
 
-    should_short = ticker_data[ticker].short
+    should_short = ticker_data[ticker]["short"]
     if should_short:
         tickers = ["WBA", "CSCO", "BA", "CAT"]
         short_thread = threading.Thread(target=shorter, args=[trader, tickers], name='shorter_thread')
@@ -39,7 +39,7 @@ def main(argv):
         routine_summary_thread.start()
 
         short_thread.join()
-        routing_summary_thread.join()
+        routine_summary_thread.join()
         
     else:
         long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
@@ -52,7 +52,6 @@ def main(argv):
         routine_summary_thread.join()
 
     trader.disconnect()
-
 
 if __name__ == '__main__':
     main(sys.argv)

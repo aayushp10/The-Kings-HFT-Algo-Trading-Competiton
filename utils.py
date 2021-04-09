@@ -108,3 +108,4 @@ def print_all_submitted_order(trader):
         )
 
     return
+

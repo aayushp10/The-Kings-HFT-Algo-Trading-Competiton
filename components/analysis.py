@@ -83,7 +83,7 @@ softmax_weights = softmax(mins)
 mins_ten, tickers_ten = (list(t)[0:10] for t in zip(*sorted(zip(mins, ticker))))
 
 print("TICKERS")
-print(used_tickers)
+print(tickers_ten)
 print("MINS")
 print(mins_ten)
 print("AVG")

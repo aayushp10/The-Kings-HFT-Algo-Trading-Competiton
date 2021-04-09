@@ -6,7 +6,7 @@ import statistics
 def collect_data(trader: shift.Trader, ticker: str):
     today = trader.get_last_trade_time()
     print(today)
-    endTime = dt.time(9, 32, 0)
+    endTime = dt.time(9, 35, 0)
     end_of_data_collection_period = dt.datetime.combine(today, endTime)
 
     prices = []
@@ -21,7 +21,11 @@ def collect_data(trader: shift.Trader, ticker: str):
     }
 
 def calculate_statistics(prices):
-    variance = statistics.variance(prices)
+    variance = 0
+    if(len(prices)> 2):
+
+        variance = statistics.variance(prices)
+
     return {
         "variance": variance,
         "short": True
