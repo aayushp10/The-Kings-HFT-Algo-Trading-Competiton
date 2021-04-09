@@ -1,13 +1,14 @@
 import sys
 import time
 import shift
-from components.market_maker_one import market_maker_one
 import threading
 import credentials
-import utils
+import queue
+
+from components.market_maker_one import market_maker_one
 from components.routine_summary import routine_summary
-
-
+from components.data_processor import collect_data
+from components.shorter import shorter
 def main(argv):
     trader = shift.Trader(credentials.my_username)
     try:
@@ -21,18 +22,36 @@ def main(argv):
     time.sleep(2)
 
     ticker = "AAPL"
+    ticker_data = {}
+    que = queue.Queue()
+    t = threading.Thread(target=que.put(collect_data(trader, ticker)), name='ticker_data_one')
+    t.start()
+    t.join()
 
-    long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
-    routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+    ticker_data[ticker] = que.get()
 
-    routine_summary_thread.start()
-    long_and_short_aapl.start()
+    should_short = ticker_data[ticker]["short"]
+    if should_short:
+        tickers = ["WBA", "CSCO", "BA", "CAT"]
+        short_thread = threading.Thread(target=shorter, args=[trader, tickers], name='shorter_thread')
+        short_thread.start()
+        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+        routine_summary_thread.start()
 
-    long_and_short_aapl.join()
-    routine_summary_thread.join()
+        short_thread.join()
+        routine_summary_thread.join()
+        
+    else:
+        long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
+        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+
+        routine_summary_thread.start()
+        long_and_short_aapl.start()
+
+        long_and_short_aapl.join()
+        routine_summary_thread.join()
 
     trader.disconnect()
-
 
 if __name__ == '__main__':
     main(sys.argv)

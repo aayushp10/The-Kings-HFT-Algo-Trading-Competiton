@@ -1,4 +1,6 @@
 import shift
+from threading import Thread
+
 
 
 def print_submitted_orders(trader: shift.Trader):
@@ -106,3 +108,4 @@ def print_all_submitted_order(trader):
         )
 
     return
+
