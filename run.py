@@ -30,26 +30,17 @@ def main(argv):
 
     ticker_data[ticker] = que.get()
 
-    should_short = ticker_data[ticker]["short"]
-    if should_short:
-        tickers = ["WBA", "CSCO", "BA", "CAT"]
-        short_thread = threading.Thread(target=shorter, args=[trader, tickers], name='shorter_thread')
-        short_thread.start()
-        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
-        routine_summary_thread.start()
+    # should_short = ticker_data[ticker]["short"]
+    
+    
+    # long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
+    routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
 
-        short_thread.join()
-        routine_summary_thread.join()
-        
-    else:
-        long_and_short_aapl = threading.Thread(target=market_maker_one, args=[trader, ticker], name='long_and_short')
-        routine_summary_thread = threading.Thread(target=routine_summary, args=[trader], name='routine_summary')
+    routine_summary_thread.start()
+    # long_and_short_aapl.start()
 
-        routine_summary_thread.start()
-        long_and_short_aapl.start()
-
-        long_and_short_aapl.join()
-        routine_summary_thread.join()
+    # long_and_short_aapl.join()
+    routine_summary_thread.join()
 
     trader.disconnect()
 

@@ -40,18 +40,18 @@ tickers = {
 'WMT': 'Walmart Inc.',  
 'XOM': 'Exxon Mobil Corporation'}
 
-market_days = ['2019-05-07', '2019-05-13', '2019-08-05', '2019-08-14', '2019-10-02']
-days = ['2019-05-07', '2019-05-13', '2019-08-05', 
+days = ['2018-02-26', '2018-03-09', '2018-04-03', '2018-10-16', '2018-10-30']
+old_days = ['2019-05-07', '2019-05-13', '2019-08-05', 
         '2019-08-14', '2019-10-02', '2018-12-24', '2019-01-03',
         '2018-12-17', '2018-12-19', '2018-12-20', '2019-05-28']
-min_min = list(tickers.keys())[0]
+max_max = list(tickers.keys())[0]
 max_avg = list(tickers.keys())[0]
 min_avg = list(tickers.keys())[0]
 
 data = {}
 used_tickers = []
 avgs = []
-mins = []
+maxs = []
 for ticker in tickers.keys():
     rets = []
     for day in days:
@@ -68,24 +68,24 @@ for ticker in tickers.keys():
         avg = sum(rets)/float(len(rets))
         used_tickers.append(ticker)
         avgs.append(avg)
-        mins.append(min(rets))
+        maxs.append(max(rets))
         print(ticker + "::::::AVG:::::::" + f"{avg}::::::MAX::::::{max(rets)}:::::{min(rets)}" )
         
-        if(min(rets) < min(data[min_min])):
-            min_min = ticker
+        if(max(rets) < max(data[max_max])):
+            max_max = ticker
         if(avg > sum(data[max_avg])/float(len(data[max_avg]))):
             max_avg = ticker
         if(avg < sum(data[max_avg])/float(len(data[max_avg]))):
             min_avg = ticker
 
-softmax_weights = softmax(mins)
+softmax_weights = softmax(maxs)
 
-mins_ten, tickers_ten = (list(t)[0:10] for t in zip(*sorted(zip(mins, ticker))))
+maxs_ten, tickers_ten = (list(t)[0:10] for t in zip(*sorted(zip(maxs, ticker))))
 
 print("TICKERS")
 print(tickers_ten)
 print("MINS")
-print(mins_ten)
+print(maxs_ten)
 print("AVG")
 print(avgs)
 print("SOFTMAX")

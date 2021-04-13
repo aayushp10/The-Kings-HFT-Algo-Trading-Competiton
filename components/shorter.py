@@ -4,8 +4,9 @@ import time
 import sys
 import math
 import utils
-def shorter(trader: shift.Trader, tickers):
 
+
+def shorter(trader: shift.Trader, tickers):
     today = trader.get_last_trade_time()
     endTime = dt.time(15, 30, 0)
     dayEnd = dt.datetime.combine(today, endTime)
