@@ -2,17 +2,21 @@ import shift
 from time import sleep
 from datetime import datetime, timedelta, time
 import numpy as np
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List
 from scipy.stats import linregress
 from multiprocessing import Process, Manager
 from collections import deque
 from routine_summary import routine_summary
 import math
+import sys
+sys.path.insert(1, '../')
+from credentials import credentials
+import datetime as dt
 
 tickers = ['AAPL']
 prices_key = 'prices'
 stop_loss_key = 'stop_losses' 
-
+sys.path.append('../')
 
 def run_save_prices(ticker: str, trader: shift.Trader, state: Dict[str, Any]) -> None:
     """
@@ -181,14 +185,26 @@ def main(trader: shift.Trader) -> None:
     """
     main entrypoint
     """
+    trader = shift.Trader(credentials.my_username)
+    try:
+        trader.connect("initiator.cfg", credentials.my_password)
+        trader.sub_all_order_book()
+    except shift.IncorrectPasswordError as e:
+        print(e)
+    except shift.ConnectionTimeoutError as e:
+        print(e)
+
+    time.sleep(2)
+
     check_time = 5 # minutes
-    start_time = time(9, 35, 0)
-    end_time = time(15, 30, 0)
+    current = trader.get_last_trade_time()
+    start_time = dt.combine(current, dt.datetime(10,0,0))
+    end_time = dt.combine(current, dt.datetime(15, 30, 0))
 
     while trader.get_last_trade_time() < start_time:
         sleep(check_time * 60)
 
-    run_processes(trader)
+    processes = run_processes(trader)
 
     while trader.get_last_trade_time() < end_time:
         sleep(check_time * 60)

@@ -1,7 +1,10 @@
 import shift
 import time
 import datetime as dt
+
+
 import utils
+
 
 def routine_summary(trader: shift.Trader) -> None:
     while True:

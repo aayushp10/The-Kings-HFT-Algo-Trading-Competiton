@@ -42,8 +42,8 @@ def market_maker_one(trader: shift.Trader, ticker: str):
     tickSize = 0.01
     # james code need to change maybe?
     today = trader.get_last_trade_time()
-    endTime = dt.time(15,50,0)
-    dayEnd = dt.datetime.combine(today,endTime)
+    endTime = dt.time(15,30,0)
+    dayEnd = dt.datetime.combine(today,dt.datetime(endTime))
     rightNow =  trader.get_last_trade_time() 
 
     #right < the end of day at 3:50
