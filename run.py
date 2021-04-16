@@ -20,7 +20,7 @@ def main(argv):
     except shift.ConnectionTimeoutError as e:
         print(e)
 
-    time.sleep(2)
+    time.sleep(15)
 
     ticker = "AAPL"
     ticker_data = {}
