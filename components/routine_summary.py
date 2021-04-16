@@ -17,7 +17,7 @@ import utils
 
 def routine_summary(trader: shift.Trader):
     today = trader.get_last_trade_time()
-    endTime = dt.time(15, 30, 0)
+    endTime = dt.time(15, 50, 0)
     dayEnd = dt.datetime.combine(today, endTime)
     rightNow = trader.get_last_trade_time()
     while trader.get_last_trade_time() < dayEnd:

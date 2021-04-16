@@ -6,7 +6,7 @@ import utils
 
 def longer(trader: shift.Trader, tickers):
     today = trader.get_last_trade_time()
-    endTime = dt.time(15, 30, 0)
+    endTime = dt.time(15, 50, 0)
     dayEnd = dt.datetime.combine(today, endTime)
     tickSize = 0.01
     bp = (trader.get_portfolio_summary().get_total_bp())
