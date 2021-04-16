@@ -28,7 +28,7 @@ def calculate_statistics(prices):
 
     return {
         "variance": variance,
-        "short": True
+        "long": True
     }
 
 
