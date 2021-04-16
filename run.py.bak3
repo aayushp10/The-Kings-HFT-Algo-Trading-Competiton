@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, time
 import numpy as np
 from typing import Dict, Any, Tuple, List
 from scipy.stats import linregress
-from threading import Thread
-from multiprocessing import Manager
+from multiprocessing import Process, Manager
 import multiprocessing as mp
 from collections import deque
 from components.routine_summary import routine_summary
@@ -14,7 +13,6 @@ import sys
 sys.path.insert(1, '../')
 import credentials
 import datetime as dt
-import pandas as pd
 
 tickers = [
 'AAPL',
@@ -66,18 +64,18 @@ def run_save_prices(ticker: str, trader: shift.Trader, state: Dict[str, Any]) ->
 
     
     while True:
-        price = trader.get_last_price(ticker)
+        # price = trader.get_last_price(ticker)
         try:
-            state[prices_key][ticker] += [trader.get_last_price(ticker)]
+            state[prices_key][ticker] += [state[trader_key].get_last_price(ticker)]
         except KeyError:
             state[prices_key][ticker] = deque(maxlen=queue_size)
             sleep(0.5)
-            state[prices_key][ticker] += [trader.get_last_price(ticker)]
+            state[prices_key][ticker] += [state[trader_key].get_last_price(ticker)]
         # if len(state[prices_key][ticker]) >= 30:
         if ticker == "AAPL":
             print(f"Prices Stored: {state[prices_key][ticker]}")
-            print(f"Last Price: {trader.get_last_price(ticker)}")
-            print(f"updated prices for AAPL @ {trader.get_last_trade_time()} there are {len(state[prices_key][ticker])} entries for price - last price {price}")
+            print(f"Last Price: {state[trader_key].get_last_price(ticker)}")
+            # print(f"updated prices for AAPL @ {trader.get_last_trade_time()} there are {len(state[prices_key][ticker])} entries for price - last price {price}")
             
         sleep(frequency)
         
@@ -174,10 +172,10 @@ def get_should_long(prices: np.array) -> Tuple[float, float]:
     fast = 9
     slow = 20
 
-    moving_avg_fast = pd.Series(prices).rolling(fast).mean()
-    moving_avg_slow = pd.Series(prices).rolling(slow).mean()
+    moving_avg_fast = np.Series(prices).rolling(fast).mean()
+    moving_avg_slow = np.Series(prices).rolling(slow).mean()
     
-    moving_std = pd.Series(prices).rolling(slow).std()
+    moving_std = np.Series(prices).rolling(slow).std()
     
     bollinger_high = moving_avg_slow + (2 * moving_std)
     bollinger_low = moving_avg_slow - (2 * moving_std)
@@ -318,7 +316,8 @@ def cancel_all_trades(trader: shift.Trader, ticker: str):
         if(o.symbol == ticker):
             trader.submit_cancellation(o)
     
-def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Thread]:
+def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Process]:
+    
     """
     create all the threads
     """
@@ -326,17 +325,21 @@ def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Thread]:
 
     processes = []
 
-    #processes.append(Thread(target=run_stop_loss_check, args=(trader, state[prices_key], state[stop_loss_key])))
-    processes.append(Thread(target=run_trades, args=(trader, state)))
-    processes.append(Thread(target=routine_summary, args=(trader,)))
+    # for ticker in tickers:
+    #     # 1 thread per ticker getting price data & saving it
+    #     processes.append(Process(target=run_save_prices, args=(ticker, trader, state)))
+
+    processes.append(Process(target=run_stop_loss_check, args=(trader, state)))
+    processes.append(Process(target=run_trades, args=(trader, state[prices_key])))
+    processes.append(Process(target=routine_summary, args=[trader]))
 
     for process in processes:
-       process.start()
+        process.start()
 
     return processes
 
 
-def stop_processes(processes: List[Thread]) -> None:
+def stop_processes(processes: List[Process]) -> None:
     """
     stop all the threads
     """
@@ -374,21 +377,19 @@ def main(trader: shift.Trader) -> None:
             elif key == target_key:    
                 state[key].setdefault(key, [0,0])
             # if key == stop_loss_key:
-    # state[trader_key] = trader
-    # trader_obj = state
+    state[trader_key] = trader
+    trader_obj = state
     check_time = 1 # minutes
     current = trader.get_last_trade_time()
     start_time = datetime.combine(current, dt.time(9,32,0))
     end_time = datetime.combine(current, dt.time(15, 30, 0))
 
     print(trader.get_last_trade_time())
-
-
     pre_processes = []
 
     for ticker in tickers:
         # 1 thread per ticker getting price data & saving it
-        pre_processes.append(Thread(target=run_save_prices, args=(ticker, trader, state)))
+        pre_processes.append(Process(target=run_save_prices, args=(ticker, trader, state)))
 
     for process in pre_processes:
         process.start()
@@ -422,25 +423,18 @@ def main(trader: shift.Trader) -> None:
     # print stuff
     routine_summary(trader)
 
-bad_year = 1969
-
 if __name__ == '__main__':
-    year = bad_year
-    curr_try, num_tries = 1, 1000
-    while year == bad_year:
-        print(f'try {curr_try}')
-        if curr_try == num_tries:
-            raise RuntimeError('1969 error...')
-        trader = shift.Trader(credentials.my_username)
-        try:
-            trader.connect("initiator.cfg", credentials.my_password)
-            trader.sub_all_order_book()
-        except shift.IncorrectPasswordError as e:
-            print(e)
-        except shift.ConnectionTimeoutError as e:
-            print(e)
-        year = trader.get_last_trade_time().year
-        sleep(2)
-        curr_try += 1
+
+    trader = shift.Trader(credentials.my_username)
+
+    try:
+        trader.connect("initiator.cfg", credentials.my_password)
+        trader.sub_all_order_book()
+    except shift.IncorrectPasswordError as e:
+        print(e)
+    except shift.ConnectionTimeoutError as e:
+        print(e)
+
+    sleep(2)
 
     main(trader)
