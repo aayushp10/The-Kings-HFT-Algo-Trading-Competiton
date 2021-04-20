@@ -4,8 +4,7 @@ from datetime import datetime, timedelta, time
 import numpy as np
 from typing import Dict, Any, Tuple, List
 from scipy.stats import linregress
-from threading import Thread
-from multiprocessing import Manager
+from multiprocessing import Process, Manager
 import multiprocessing as mp
 from collections import deque
 from components.routine_summary import routine_summary
@@ -14,39 +13,38 @@ import sys
 sys.path.insert(1, '../')
 import credentials
 import datetime as dt
-import pandas as pd
 
 tickers = [
 'AAPL',
 'AXP',
 'BA',
-'CAT',
-'CSCO',
-'CVX',
-'DIS',
-'DWDP',
-'GS',
-'HD',
-'IBM',
-'INTC',
-'JNJ',
-'JPM',
-'KO',
-'MCD',
-'MMM',
-'MRK',
-'MSFT',
-'NKE',
-'PFE',
-'PG',
-'TRV',
-'UNH',
-'UTX',
-'V',
-'VZ',
-'WBA',
-'WMT',
-'XOM'
+# 'CAT',
+# 'CSCO',
+# 'CVX',
+# 'DIS',
+# 'DWDP',
+# 'GS',
+# 'HD',
+# 'IBM',
+# 'INTC',
+# 'JNJ',
+# 'JPM',
+# 'KO',
+# 'MCD',
+# 'MMM',
+# 'MRK',
+# 'MSFT',
+# 'NKE',
+# 'PFE',
+# 'PG',
+# 'TRV',
+# 'UNH',
+# 'UTX',
+# 'V',
+# 'VZ',
+# 'WBA',
+# 'WMT',
+# 'XOM'
 ]
 prices_key = 'prices'
 stop_loss_key = 'stop_losses' 
@@ -66,19 +64,19 @@ def run_save_prices(ticker: str, trader: shift.Trader, state: Dict[str, Any]) ->
 
     
     while True:
-        price = trader.get_last_price(ticker)
+        # price = trader.get_last_price(ticker)
         try:
-            state[prices_key][ticker] += [trader.get_last_price(ticker)]
+            state[prices_key][ticker] += [state[trader_key].get_last_price(ticker)]
         except KeyError:
             state[prices_key][ticker] = deque(maxlen=queue_size)
             sleep(0.5)
-            state[prices_key][ticker] += [trader.get_last_price(ticker)]
-        if len(state[prices_key][ticker]) >= 30:
-
-            # print(f"Prices Stored: {state[prices_key][ticker]}")
-            print(f"Last Price: {trader.get_last_price(ticker)}")
+            state[prices_key][ticker] += [state[trader_key].get_last_price(ticker)]
+        # if len(state[prices_key][ticker]) >= 30:
+        if ticker == "AAPL":
+            print(f"Prices Stored: {state[prices_key][ticker]}")
+            print(f"Last Price: {state[trader_key].get_last_price(ticker)}")
             # print(f"updated prices for AAPL @ {trader.get_last_trade_time()} there are {len(state[prices_key][ticker])} entries for price - last price {price}")
-        # print(f"{ticker} PRICE UPDATED")
+            
         sleep(frequency)
         
 
@@ -170,29 +168,26 @@ def get_momentum(prices: np.array) -> float:
 def get_should_long(prices: np.array) -> Tuple[float, float]:
 
     # use window to calculate moving avg and moving standard deviation
-    if(len(prices) > 21):
-        fast = 9
-        slow = 21
 
-        prev_moving_avg_slow = pd.Series(prices[:-1]).rolling(slow).mean()
-        prev_moving_avg_fast = pd.Series(prices[:-1]).rolling(fast).mean()
+    fast = 9
+    slow = 20
 
-        moving_avg_fast = pd.Series(prices).rolling(fast).mean()
-        moving_avg_slow = pd.Series(prices).rolling(slow).mean()
-        
-        moving_std = pd.Series(prices).rolling(slow).std()
-        
-        bollinger_high = moving_avg_slow + (2 * moving_std)
-        bollinger_low = moving_avg_slow - (2 * moving_std)
+    moving_avg_fast = np.Series(prices).rolling(fast).mean()
+    moving_avg_slow = np.Series(prices).rolling(slow).mean()
+    
+    moving_std = np.Series(prices).rolling(slow).std()
+    
+    bollinger_high = moving_avg_slow + (2 * moving_std)
+    bollinger_low = moving_avg_slow - (2 * moving_std)
 
-        return {
-            "last_bollinger_band_high": bollinger_high,
-            "bollinger_band_high_difference":  (prices[-1] - bollinger_high[-1]),
-            "bollinger_band_low_difference":  (prices[-1] - bollinger_low[-1]),
-            "ema_difference": (moving_avg_fast.iloc[-1] - moving_avg_slow.iloc[-1])/prices[-1],
-            "prev_ema_difference": (prev_moving_avg_fast.iloc[-2] - prev_moving_avg_slow.iloc[-2])/prices[-2],
-        }
-    return None
+    return {
+        "last_bollinger_band_high": bollinger_high[-1],
+        "last_bollinger_band_low": bollinger_low[-1],
+        "bollinger_band_high_difference":  (prices[-1] - bollinger_high[-1]),
+        "bollinger_band_low_difference":  (prices[-1] - bollinger_low[-1]),
+        "ema_difference": (moving_avg_fast[-1] - moving_avg_slow[-1])/prices[-1],
+    }
+    
 
     # 21 EMA and 9 EMA cross? (If last period 9EMA-21EMA < 0, and current period 9EMA-21EMA > 0, then we take a start
     # long position)
@@ -209,15 +204,31 @@ def get_should_long(prices: np.array) -> Tuple[float, float]:
             # f it is 3:30, then close the entire position
     # If price <= trailing stop loss price, sell all of the current position
 
+def get_unrealized_pnl(trader: shift.Trader):
+    short_profit = 0
+    long_profit = 0
+    for item, value in ziplist(trader.get_portfolio_items().keys(), trader.get_portfolio_items().values()):
+        pnl = trader.get_unrealized_pl(item)
+        #in short
+        if value.get_shares() < 0:
+            short_profit += pnl
+        if value.get_shares() > 0:
+            long_profit += pnl
+
+
+    return short_profit, long_profit
+
+
 
 def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
     """
     run buy / sell trades
     """
     run_trades_interval = 30 # seconds
-    maxLoss = 0.01
+    maxLoss = 0.004
+    maxGain = 0.004
     while True:
-        # if (len())
+
         unsorted_differences: List[float] = []
         unsorted_tickers: List[str] = []
         for ticker in tickers:
@@ -226,25 +237,23 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                 continue
             prices = np.array(list(state[prices_key][ticker]))
             should_long = get_should_long(prices)
-            if(should_long is None):
-                sleep(1)
-                continue
             ema_difference = should_long["ema_difference"]
-            prev_ema_difference = should_long["prev_ema_difference"]
-            print(ema_difference)
             unsorted_differences.append(ema_difference)  
             unsorted_tickers.append(ticker)  
         
 
+        if ticker == "AAPL":
+            print("PRE UNPACKING")
+            print(unsorted_differences)
+            print(unsorted_tickers)
+            print((list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_tickers)))))
 
-        _, ranked_tickers = (reversed(list(t)) for t in zip(*sorted(zip(unsorted_differences, unsorted_tickers))))
+        
+        _, ranked_tickers = (list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_tickers))))
 
         for ticker in ranked_tickers:
             prices = np.array(list(state[prices_key][ticker]))
             should_long = get_should_long(prices)
-            if(should_long is None):
-                sleep(1)
-                continue
             ema_difference = should_long["ema_difference"]
             price_minus_bollinger_high = should_long["bollinger_band_high_difference"]
             price_minus_bollinger_low = should_long["bollinger_band_low_difference"]
@@ -256,38 +265,32 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                 target_hit_count = state[target_key][ticker][0]
                 if ema_difference < 0:
                     cancel_all_trades(trader, ticker)
-                    print(f"{ticker} : HAVE SHARES, EMA DOWN, SELL")
                     sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, int(item.get_shares()/100.0))
                     trader.submit_order(sell)
-
-                # over band, never hit
-                elif price_minus_bollinger > 0 and target_hit_count == 0:
+                elif price_minus_bollinger_high > 0 and target_hit_count == 0:
+                    # over band, never hit
                     cancel_all_trades(trader, ticker)
                     s = item.get_shares()
-                    print(f"{ticker} : HAVE SHARES, FIRST TARGET HIT, SELL HALF")
                     sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, int(math.ceil((s/2) / 100.0)))
                     trader.submit_order(sell)
 
                     #check if you happen to sell all due to minimum lot
+                    #if still have long positions, reset limit sell
                     if int(math.ceil((item.get_shares()/2) / 100.0)) < int(s/100):
-
                         lastPrice = trader.get_last_price(ticker)
                         initial_buy_price = item.get_price()
-                        #keep track of this in state
                         trailing_stop_perc = (lastPrice - initial_buy_price) / initial_buy_price
                         trailing_stop_price = (1 - trailing_stop_perc) * lastPrice
-                        print(f"{ticker} : HAVE SHARES, FIRST TARGET HIT, RESETTING LIMIT SELL")
                         sell = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, int(math.ceil((item.get_shares()/2) / 100.0)), trailing_stop_price)
                         trader.submit_order(sell)
+                        #keep track of this in state
                         state[target_key][ticker] = [target_hit_count + 1, trailing_stop_perc]
                     
-            
                 elif target_hit_count > 0:
                     sold = 0
-                    if price_minus_bollinger > 0:
+                    if price_minus_bollinger_high > 0:
                         cancel_all_trades(trader, ticker)
                         sold = int(math.ceil((item.get_shares()/2) / 100.0))
-                        print(f"{ticker} : HAVE SHARES, OVER FIRST TARGET HIT, TAKING MORE PROFIT SINCE STILL ABOVE BOLLINGER, SELL HALFT")
                         sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, sold)
                         trader.submit_order(sell)
                     if sold < int(item.get_shares()/100):
@@ -295,17 +298,19 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         lastPrice = trader.get_last_price(ticker)
 
                         avg_last_two_prices = (state[prices_key][ticker][-2] + state[prices_key][ticker][-1]) / 2.
-                        
+                        #we have shares, hits target for 2nd time,  and price > upper bo, and we took 1/2 profit, we still have more
                         if lastPrice >= avg_last_two_prices:
                             cancel_all_trades(trader, ticker)
                             # keep same percentarange and update the loss PRICE
+                            #TODO: fix a dollar amount instead of percentage
                             trailing_stop_perc = state[target_key][ticker][1]
                             trailing_stop_price = (1 - trailing_stop_perc) * lastPrice
-                            print(f"{ticker} : HAVE SHARES, OVER FIRST TARGET HIT, SOLD MORE PROFIT SINCE STILL ABOVE BOLLINGER, STILL HAVE MORE, RESETTING LIMIT")
                             sell = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, item.get_shares() / 100.0, trailing_stop_price)
                             trader.submit_order(sell)
                         else:
                             pass
+                        
+            #comment this if you want to yeet the short logic
             elif item.get_shares() < 0:
                 #check to see if we need to exit short positions
                 target_hit_count = state[target_key][ticker][0]
@@ -354,15 +359,18 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         else: 
                             pass
                     
-                   
-                    
+                
+
+                
             else:
-                #reset target_hit_count because no shores no more
+                #reset target_hit_count because no shares no more
                 state[target_key][ticker] = [0,0]
                 for order in trader.get_waiting_list():
                     if order.symbol == ticker and order.type == shift.Order.Type.MARKET_BUY:
                         trader.submit_cancellation(order)
-                if ema_difference > 0 and prev_ema_difference < 0:
+                    if order.symbol == ticker and order.type == shift.Order.Type.MARKET_SELL:
+                        trader.submit_cancellation(order)
+                if ema_difference > 0:
                     bp = trader.get_portfolio_summary().get_total_bp()
                     amount = 200e3
                     if bp >= amount:
@@ -370,11 +378,33 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         s = int((amount / lastPrice) / 100.)
                         buy = shift.Order(shift.Order.Type.MARKET_BUY, ticker, s)
                         initial_buy_price = trader.get_last_price(ticker)
-                        initial_stop_loss = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, s, trader.get_last_price(ticker)*(1-maxLoss))
-                        print(f"{ticker} : DONT HAVE SHARES, HIT TARGET, HAVE BP, BUY")
+                        initial_stop_loss = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, trader.get_last_price(ticker)*(1-maxLoss), s)
                         trader.submit_order(buy)
-                        print(f"{ticker} : DONT HAVE SHARES, HIT TARGET, HAVE BP, SETTING INITIAL STOP LOSS")
                         trader.submit_order(initial_stop_loss)
+                #comment this if you want to yeet the short logic
+                elif ema_difference < 0:
+                    bp = trader.get_portfolio_summary().get_total_bp()
+                    short_profit, long_profit = get_unrealized_pl(trader)
+                    #lost money on shorts
+                    amount = (200e3 / 2)
+                    amount_to_subtract = 0
+                    if short_profit < 0:
+                        amount_to_subtract += (-1*short_profit)
+                    
+                    if (0.995 * (amount - amount_to_subtract)) < bp:
+                        lastPrice = trader.get_last_price()
+                        s = int((amount / lastPrice) / 100.)
+                        sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, s)
+                        initial_sell_price = trader.get_last_price(ticker)
+                        initial_stop_loss = shift.Order(shift.Order.Type.LIMIT_BUY, ticker, trader.get_last_price(ticker)*(1+maxLoss), s)
+                        trader.submit_order(sell)
+                        trader.submit_order(initial_stop_loss)
+
+
+                
+                    #
+                    # check to see if we should enter short position
+                    pass
         sleep(run_trades_interval)
 
 def cancel_all_trades(trader: shift.Trader, ticker: str):
@@ -382,7 +412,8 @@ def cancel_all_trades(trader: shift.Trader, ticker: str):
         if(o.symbol == ticker):
             trader.submit_cancellation(o)
     
-def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Thread]:
+def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Process]:
+    
     """
     create all the threads
     """
@@ -390,17 +421,21 @@ def run_processes(trader: shift.Trader, state: Dict[str, Any]) -> List[Thread]:
 
     processes = []
 
-    #processes.append(Thread(target=run_stop_loss_check, args=(trader, state[prices_key], state[stop_loss_key])))
-    processes.append(Thread(target=run_trades, args=(trader, state)))
-    processes.append(Thread(target=routine_summary, args=(trader,)))
+    # for ticker in tickers:
+    #     # 1 thread per ticker getting price data & saving it
+    #     processes.append(Process(target=run_save_prices, args=(ticker, trader, state)))
+
+    processes.append(Process(target=run_stop_loss_check, args=(trader, state)))
+    processes.append(Process(target=run_trades, args=(trader, state[prices_key])))
+    processes.append(Process(target=routine_summary, args=[trader]))
 
     for process in processes:
-       process.start()
+        process.start()
 
     return processes
 
 
-def stop_processes(processes: List[Thread]) -> None:
+def stop_processes(processes: List[Process]) -> None:
     """
     stop all the threads
     """
@@ -438,22 +473,19 @@ def main(trader: shift.Trader) -> None:
             elif key == target_key:    
                 state[key].setdefault(key, [0,0])
             # if key == stop_loss_key:
-    # state[trader_key] = trader
-    # trader_obj = state
+    state[trader_key] = trader
+    trader_obj = state
     check_time = 1 # minutes
     current = trader.get_last_trade_time()
     start_time = datetime.combine(current, dt.time(9,32,0))
     end_time = datetime.combine(current, dt.time(15, 30, 0))
 
     print(trader.get_last_trade_time())
-
-
     pre_processes = []
 
     for ticker in tickers:
         # 1 thread per ticker getting price data & saving it
-        pre_processes.append(Thread(target=run_save_prices, args=(ticker, trader, state)))
-        # run_save_prices(ticker, trader, state)
+        pre_processes.append(Process(target=run_save_prices, args=(ticker, trader, state)))
 
     for process in pre_processes:
         process.start()
@@ -469,7 +501,6 @@ def main(trader: shift.Trader) -> None:
     processes = pre_processes.extend(run_processes(trader, state))
 
     while trader.get_last_trade_time() < end_time:
-        print(f"Waiting for Market Close @ {trader.get_last_trade_time()}")
         sleep(check_time * 60)
 
     for order in trader.get_waiting_list():
@@ -488,15 +519,9 @@ def main(trader: shift.Trader) -> None:
     # print stuff
     routine_summary(trader)
 
-# bad_year = 1969
-
 if __name__ == '__main__':
-    # year = bad_year
-    # curr_try, num_tries = 1, 1000
 
-    sleep(5)
     trader = shift.Trader(credentials.my_username)
-
 
     try:
         trader.connect("initiator.cfg", credentials.my_password)
@@ -506,22 +531,6 @@ if __name__ == '__main__':
     except shift.ConnectionTimeoutError as e:
         print(e)
 
-
-    sleep(15)
-    # while year == bad_year:
-    #     print(f'try {curr_try}')
-    #     if curr_try == num_tries:
-    #         raise RuntimeError('1969 error...')
-    #     trader = shift.Trader(credentials.my_username)
-    #     try:
-    #         trader.connect("initiator.cfg", credentials.my_password)
-    #         trader.sub_all_order_book()
-    #     except shift.IncorrectPasswordError as e:
-    #         print(e)
-    #     except shift.ConnectionTimeoutError as e:
-    #         print(e)
-    #     year = trader.get_last_trade_time().year
-    #     sleep(2)
-    #     curr_try += 1
+    sleep(2)
 
     main(trader)

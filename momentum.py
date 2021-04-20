@@ -182,7 +182,9 @@ def get_should_long(prices: np.array) -> Tuple[float, float]:
 
     return {
         "last_bollinger_band_high": bollinger_high[-1],
-        "bollinger_band_difference":  (prices[-1] - bollinger_high[-1]),
+        "last_bollinger_band_low": bollinger_low[-1],
+        "bollinger_band_high_difference":  (prices[-1] - bollinger_high[-1]),
+        "bollinger_band_low_difference":  (prices[-1] - bollinger_low[-1]),
         "ema_difference": (moving_avg_fast[-1] - moving_avg_slow[-1])/prices[-1],
     }
     
@@ -202,13 +204,29 @@ def get_should_long(prices: np.array) -> Tuple[float, float]:
             # f it is 3:30, then close the entire position
     # If price <= trailing stop loss price, sell all of the current position
 
+def get_unrealized_pnl(trader: shift.Trader):
+    short_profit = 0
+    long_profit = 0
+    for item, value in ziplist(trader.get_portfolio_items().keys(), trader.get_portfolio_items().values()):
+        pnl = trader.get_unrealized_pl(item)
+        #in short
+        if value.get_shares() < 0:
+            short_profit += pnl
+        if value.get_shares() > 0:
+            long_profit += pnl
+
+
+    return short_profit, long_profit
+
+
 
 def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
     """
     run buy / sell trades
     """
     run_trades_interval = 30 # seconds
-    maxLoss = 0.002
+    maxLoss = 0.004
+    maxGain = 0.004
     while True:
 
         unsorted_differences: List[float] = []
@@ -228,49 +246,49 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
             print("PRE UNPACKING")
             print(unsorted_differences)
             print(unsorted_tickers)
-            print((list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_ticker)))))
+            print((list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_tickers)))))
 
         
-        _, ranked_tickers = (list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_ticker))))
+        _, ranked_tickers = (list(t) for t in zip(*sorted(zip(unsorted_differences, unsorted_tickers))))
 
         for ticker in ranked_tickers:
             prices = np.array(list(state[prices_key][ticker]))
             should_long = get_should_long(prices)
             ema_difference = should_long["ema_difference"]
-            price_minus_bollinger = should_long["bollinger_band_difference"]
+            price_minus_bollinger_high = should_long["bollinger_band_high_difference"]
+            price_minus_bollinger_low = should_long["bollinger_band_low_difference"]
             last_upper_bollinger_band = should_long["last_bollinger_band_high"]
+            last_lower_bollinger_band = should_long["last_bollinger_band_low"]
             item = trader.get_portfolio_item(ticker)
             if item.get_shares() > 0:
                 # check to sell
+                target_hit_count = state[target_key][ticker][0]
                 if ema_difference < 0:
                     cancel_all_trades(trader, ticker)
                     sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, int(item.get_shares()/100.0))
                     trader.submit_order(sell)
-                    
-                
-                target_hit_count = state[target_key][ticker][0]
-
-                # over band, never hit
-                if price_minus_bollinger > 0 and target_hit_count == 0:
+                elif price_minus_bollinger_high > 0 and target_hit_count == 0:
+                    # over band, never hit
                     cancel_all_trades(trader, ticker)
                     s = item.get_shares()
                     sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, int(math.ceil((s/2) / 100.0)))
                     trader.submit_order(sell)
 
                     #check if you happen to sell all due to minimum lot
+                    #if still have long positions, reset limit sell
                     if int(math.ceil((item.get_shares()/2) / 100.0)) < int(s/100):
                         lastPrice = trader.get_last_price(ticker)
                         initial_buy_price = item.get_price()
-                        #keep track of this in state
                         trailing_stop_perc = (lastPrice - initial_buy_price) / initial_buy_price
                         trailing_stop_price = (1 - trailing_stop_perc) * lastPrice
                         sell = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, int(math.ceil((item.get_shares()/2) / 100.0)), trailing_stop_price)
+                        trader.submit_order(sell)
+                        #keep track of this in state
                         state[target_key][ticker] = [target_hit_count + 1, trailing_stop_perc]
                     
-                sold = 0
-                if target_hit_count > 0:
+                elif target_hit_count > 0:
                     sold = 0
-                    if price_minus_bollinger > 0:
+                    if price_minus_bollinger_high > 0:
                         cancel_all_trades(trader, ticker)
                         sold = int(math.ceil((item.get_shares()/2) / 100.0))
                         sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, sold)
@@ -280,10 +298,11 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         lastPrice = trader.get_last_price(ticker)
 
                         avg_last_two_prices = (state[prices_key][ticker][-2] + state[prices_key][ticker][-1]) / 2.
-                        
+                        #we have shares, hits target for 2nd time,  and price > upper bo, and we took 1/2 profit, we still have more
                         if lastPrice >= avg_last_two_prices:
                             cancel_all_trades(trader, ticker)
                             # keep same percentarange and update the loss PRICE
+                            #TODO: fix a dollar amount instead of percentage
                             trailing_stop_perc = state[target_key][ticker][1]
                             trailing_stop_price = (1 - trailing_stop_perc) * lastPrice
                             sell = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, item.get_shares() / 100.0, trailing_stop_price)
@@ -291,12 +310,65 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         else:
                             pass
                         
+            #comment this if you want to yeet the short logic
+            elif item.get_shares() < 0:
+                #check to see if we need to exit short positions
+                target_hit_count = state[target_key][ticker][0]
+
+                if ema_difference > 0:
+                    cancel_all_trades(trader, ticker)
+                    buy = Shift.Order(shift.Order.Type.MARKET_BUY, ticker, -1*int(item.get_shares()/100.0))
+                    trader.submit_order(buy)
+
+                elif price_minus_bollinger_low < 0 and target_hit_count == 0:
+                    cancel_all_trades(trader, ticker)
+                    s = item.get_shares()
+                    buy = shift.Order(shift.Order.Type.MARKET_BUY, ticker, -1*int(math.ceil((s/2) / 100.0)))
+                    trader.submit_order(buy)
                     
+                    #check if you happen to buy all back due to minimum lot
+                    #if still have short positions, reset limit buy
+                    if -1*int(math.ceil((item.get_shares()/2) / 100.0)) < -1*int(s/100) :
+                        lastPrice = trader.get_last_price(ticker)
+                        initial_sell_price = item.get_price()
+                        trailing_stop_perc = (lastPrice - initial_sell_price) / initial_sell_price
+                        trailing_stop_price = (1 + trailing_stop_perc) * lastPrice
+                        buy = shift.Order(shift.Order.Type.LIMIT_BUY, ticker, int(math.ceil((item.get_shares()/2) / 100.0)), trailing_stop_price)
+                        trader.submit_order(buy)
+                        state[target_key][ticker] = [target_hit_count + 1, trailing_stop_perc]
+
+                #no close of position at all, so we just wanna reset the trailing stop loss
+                elif target_hit_count > 0:
+                    bought = 0
+                    if price_minus_bollinger_low < 0:
+                        cancel_all_trades(trader, ticker)
+                        bought = -1*int(math.ceil((item.get_shares()/2) / 100.0))
+                        buy = shift.Order(shift.Order.Type.MARKET_BUY, ticker, bought)
+                        trader.submit_order(buy)
+                    if bought < -1*int(item.get_shares() / 100.0):
+                        lastPrice = trader.get_last_price(ticker)
+                        avg_last_two_prices = (state[prices_key][ticker][-2] + state[prices_key][ticker][-1]) / 2.
+                        # keep same percentarange and update the loss PRICE
+                        #TODO: fix a dollar amount instead of percentage
+                        if lastPrice <= avg_last_two_prices:
+                            cancel_all_trades(trader, ticker)
+                            trailing_stop_perc = state[target_key][1]
+                            trailing_stop_price = (1 + trailing_stop_perc) * lastPrice
+                            buy = shift.Order(shift.Order.Type.LIMIT_BUY, ticker, item.get_shares() / 100.0, trailing_stop_price)
+                            trader.submit_order(buy)
+                        else: 
+                            pass
+                    
+                
+
+                
             else:
-                #reset target_hit_count because no shores no more
+                #reset target_hit_count because no shares no more
                 state[target_key][ticker] = [0,0]
                 for order in trader.get_waiting_list():
                     if order.symbol == ticker and order.type == shift.Order.Type.MARKET_BUY:
+                        trader.submit_cancellation(order)
+                    if order.symbol == ticker and order.type == shift.Order.Type.MARKET_SELL:
                         trader.submit_cancellation(order)
                 if ema_difference > 0:
                     bp = trader.get_portfolio_summary().get_total_bp()
@@ -309,6 +381,30 @@ def run_trades(trader: shift.Trader, state: Dict[str, Any]) -> None:
                         initial_stop_loss = shift.Order(shift.Order.Type.LIMIT_SELL, ticker, trader.get_last_price(ticker)*(1-maxLoss), s)
                         trader.submit_order(buy)
                         trader.submit_order(initial_stop_loss)
+                #comment this if you want to yeet the short logic
+                elif ema_difference < 0:
+                    bp = trader.get_portfolio_summary().get_total_bp()
+                    short_profit, long_profit = get_unrealized_pl(trader)
+                    #lost money on shorts
+                    amount = (200e3 / 2)
+                    amount_to_subtract = 0
+                    if short_profit < 0:
+                        amount_to_subtract += (-1*short_profit)
+                    
+                    if (0.995 * (amount - amount_to_subtract)) < bp:
+                        lastPrice = trader.get_last_price()
+                        s = int((amount / lastPrice) / 100.)
+                        sell = shift.Order(shift.Order.Type.MARKET_SELL, ticker, s)
+                        initial_sell_price = trader.get_last_price(ticker)
+                        initial_stop_loss = shift.Order(shift.Order.Type.LIMIT_BUY, ticker, trader.get_last_price(ticker)*(1+maxLoss), s)
+                        trader.submit_order(sell)
+                        trader.submit_order(initial_stop_loss)
+
+
+                
+                    #
+                    # check to see if we should enter short position
+                    pass
         sleep(run_trades_interval)
 
 def cancel_all_trades(trader: shift.Trader, ticker: str):
