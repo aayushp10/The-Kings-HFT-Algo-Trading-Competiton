@@ -23,7 +23,6 @@ ATR=(1/n) = (i=1)∑(n)TR i
 """
 
 import numpy as np
-import pandas_datareader as pdr
 import datetime as dt
 
 candles_key = 'candles'
