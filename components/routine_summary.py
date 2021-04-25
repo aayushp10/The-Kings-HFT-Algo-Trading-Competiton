@@ -15,14 +15,14 @@ import utils
 #         time.sleep(15)
 
 
-def routine_summary(trader: shift.Trader):
-    today = trader.get_last_trade_time()
-    endTime = dt.time(15, 50, 0)
-    dayEnd = dt.datetime.combine(today, endTime)
-    rightNow = trader.get_last_trade_time()
-    while trader.get_last_trade_time() < dayEnd:
+def routine_summary(trader: shift.Trader, end_time):
+    # today = trader.get_last_trade_time()
+    # endTime = dt.time(9, 50, 0)
+    # dayEnd = dt.datetime.combine(today, endTime)
+    # rightNow = trader.get_last_trade_time()
+    while trader.get_last_trade_time() < end_time:
+        print(f"----------{trader.get_last_trade_time()}-------------")
         utils.print_all_submitted_order(trader)
-        
         utils.print_portfolio_information(trader)
         ct = dt.datetime.now()
         print("current time:-", ct)

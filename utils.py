@@ -74,17 +74,17 @@ def print_portfolio_information(trader: shift.Trader):
     print("Symbol\t\tShares\t\tPrice\t\t  P&L\t\t Unrealized P&L \nTimestamp")
     for item in trader.get_portfolio_items().values():
         print(
-            "%6s\t\t%6d\t\t%9.2f\t\t%9.2f\t\t%9.2f\t\t%26s"
+            "%6s\t\t%6d\t%9.2f\t%9.2f\t%26s"
             % (
                 item.get_symbol(),
                 item.get_shares(),
                 item.get_price(),
                 item.get_realized_pl(),
-                upl[item.get_symbol()],
                 item.get_timestamp(),
             )
         )
-
+    print("UNREALIZED PNL")
+    print(upl)
     return
 
 
