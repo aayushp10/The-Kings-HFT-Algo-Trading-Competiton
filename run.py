@@ -15,7 +15,7 @@ from collections import deque
 from components.routine_summary import routine_summary
 import utils
 tickers = ["AAPL"
-, "XOM", "VZ", "UNH"
+# , "XOM", "VZ", "UNH"
 ]
 """
 TR=Max[(H − L),Abs(H − Cp),Abs(L − Cp)]
