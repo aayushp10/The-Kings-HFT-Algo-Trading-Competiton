@@ -26,5 +26,5 @@ def routine_summary(trader: shift.Trader, end_time):
         utils.print_portfolio_information(trader)
         ct = dt.datetime.now()
         print("current time:-", ct)
-        time.sleep(60)
+        time.sleep(30)
     return 0

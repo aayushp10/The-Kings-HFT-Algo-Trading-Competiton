@@ -26,9 +26,9 @@ import numpy as np
 import datetime as dt
 
 candles_key = 'candles'
-candle_size = 60
+candle_size = 30
 safe_sleep = 5
-buffer = 200e3
+buffer = 20e3
 def ATR(candles: List[Candle], length = 20):
 
     # https://www.learnpythonwithrune.org/calculate-the-average-true-range-atr-easy-with-pandas-dataframes/
@@ -57,7 +57,7 @@ def ATR(candles: List[Candle], length = 20):
     true_range = np.max(ranges, axis=1)
 
     atr = true_range.rolling(length).sum()/length
-    #atr = true_range.ewm(alpha=1/length, adjust=False).mean()
+    # atr = true_range.ewm(alpha=1/length, adjust=False).mean()
     return atr, true_range
 
 
@@ -96,7 +96,7 @@ def buy_back_shorted(ticker: str, trader: shift.Trader):
         orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100))
         sleep(10)
         item = trader.get_portfolio_item(ticker)
-    print(f'submitted buy for {ticker}')
+        print(f'submitted buy for {ticker}')
     # if item.get_shares() < 0:
         # buy = shift.Order(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
         # trader.submit_order(buy)
@@ -110,16 +110,19 @@ def sell_long(ticker: str, trader: shift.Trader):
         item = trader.get_portfolio_item(ticker)
         # sell = shift.Order(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
         # trader.submit_order(sell)
-    print(f'submitted sell for {ticker}')
+        print(f'submitted sell for {ticker}')
 
 
 def buy_back_half(ticker: str, trader: shift.Trader):
 
     item = trader.get_portfolio_item(ticker)
-    while(item.get_shares() < 0):
+
+    if item.get_shares() == -100:
+        orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100))
+    else:
         orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int((-1* item.get_shares() / 100)/2))
-        sleep(10)
-        item = trader.get_portfolio_item(ticker)
+    sleep(10)
+
     print(f'submitted buy for {ticker}')
     # if item.get_shares() < 0:
         # buy = shift.Order(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
@@ -128,10 +131,13 @@ def buy_back_half(ticker: str, trader: shift.Trader):
 def sell_half(ticker: str, trader: shift.Trader):
     
     item = trader.get_portfolio_item(ticker)
-    while(item.get_shares() > 0):
+
+    if item.get_shares() == 100:
+        orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100))
+    else:
         orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int((item.get_shares() / 100)/2))
-        sleep(10)
-        item = trader.get_portfolio_item(ticker)
+    sleep(10)
+
         # sell = shift.Order(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
         # trader.submit_order(sell)
     print(f'submitted sell for {ticker}')    
@@ -174,7 +180,50 @@ def place_orders(order_type: shift.Order.Type, ticker: str, size: int):
     
     return [order]
 
-    
+
+def check_pnl(ticker: str, trader: shift.Trader, state: Dict[str, Any], end_time):
+    while trader.get_last_trade_time() < end_time:
+        
+
+        bid = trader.get_best_price(ticker).get_bid_price()
+        ask = trader.get_best_price(ticker).get_ask_price()
+        mid_price = (bid + ask) / 2
+
+        shares = trader.get_portfolio_item(ticker).get_shares()
+        cost = trader.get_portfolio_item(ticker).get_price()
+        unrealized_pnl = 0
+        if shares < 0:       
+            unrealized_pnl =  (-1*shares * cost) - (-1*shares * mid_price)
+        elif shares > 0:
+            unrealized_pnl = (shares * mid_price) - (shares * cost)
+        
+
+        print(f"Current Mid Price: {mid_price}")
+        print(f"Current Time P&L: {unrealized_pnl}")
+
+        if unrealized_pnl >= 500:
+                
+            if trader.get_portfolio_item(ticker).get_shares() > 0:
+                sell_half(ticker, trader)
+                print("SELLING HALF LONGS FOR PROFIT")
+                
+            else:
+                buy_back_half(ticker, trader)
+                print("BUYING BACK HALF SHORTS FOR PROFIT")
+                
+        elif unrealized_pnl <= -500:
+
+            if trader.get_portfolio_item(ticker).get_shares() > 0:
+                sell_half(ticker, trader)
+                print("SELLING HALF LONGS FOR LOSS")
+                
+            else:
+                buy_back_half(ticker, trader)
+                print("BUYING BACK HALF SHORTS FOR LOSS")
+                
+
+        sleep(candle_size/2)
+
 def run_volatility(ticker: str, state: Dict[str, Any], end_time, length = 20, factor = 2.25):
     
 
@@ -194,41 +243,6 @@ def run_volatility(ticker: str, state: Dict[str, Any], end_time, length = 20, fa
     prev_uptrend = None
     
     while trader.get_last_trade_time() < end_time:
-        
-        print(f"Current Time P&L: {trader.get_unrealized_pl(ticker)}")
-
-        bid = trader.get_best_price(ticker).get_bid_price()
-        ask = trader.get_best_price(ticker).get_ask_price()
-        mid_price = (bid + ask) / 2
-
-        print(f"Current Mid Price: {mid_price}")
-        
-        if trader.get_unrealized_pl(ticker) >= 500:
-            
-            if trader.get_portfolio_item(ticker).get_shares() > 0:
-                sell_half(ticker, trader)
-                print("SELLING HALF LONGS FOR PROFIT")
-                sleep(15)
-                continue
-            else:
-                buy_back_half(ticker, trader)
-                print("BUYING BACK HALF SHORTS FOR PROFIT")
-                sleep(15)
-                continue
-
-        elif trader.get_unrealized_pl(ticker) <= -500:
-
-            if trader.get_portfolio_item(ticker).get_shares() > 0:
-                sell_long(ticker, trader)
-                print("SELLING HALF LONGS FOR LOSS")
-                sleep(15)
-                continue
-            else:
-                buy_back_shorted(ticker, trader)
-                print("BUYING BACK HALF SHORTS FOR LOSS")
-                sleep(15)
-                continue
-
 
         atr, tr = ATR(state[candles_key][ticker], length)
         # print("ATR")
@@ -288,24 +302,24 @@ def run_volatility(ticker: str, state: Dict[str, Any], end_time, length = 20, fa
             maximum = lastClose
             minimum = lastClose
             # unrealized_short_pnl = get_unrealized_short_pnl(trader)            
-            start_position = False
+            start_long_position = False
             if checker == None:
                 if uptrend:
-                    start_position = True
+                    start_long_position = True
             elif checker == False:
-                start_position = True
+                start_long_position = True
             elif checker == True:
-                start_position == False
+                start_long_position == False
 
             # TODO - fix bp / shares, minimum of 200k and bp for buy
             # TODO - fix order of closing at day end
 
-            if(start_position):
-                print("INSTANTIATING POSITION")
+            if(start_long_position):
+                print("INSTANTIATING LONG POSITION")
             # elif checker == False:
                 # prev was in downtrend, now in uptrend
                 buy_back_shorted(ticker, trader)
-                print("ATR FLIPPED, BOUGHT SHORTED")
+                print("ATR FLIPPED, BOUGHT BACK SHORTED IF WE HAD POSITIONS")
                 #sleep
                 sleep(safe_sleep)
                 #take longs with market order
@@ -317,17 +331,18 @@ def run_volatility(ticker: str, state: Dict[str, Any], end_time, length = 20, fa
 
                 bp = trader.get_portfolio_summary().get_total_bp() - get_unrealized_short_pnl(trader) - buffer
                 if bp > 0:
-                    amount = 200e3 if ((bp/tickers_left_to_invest) >= 200e3) else (bp/tickers_left_to_invest)
+                    amount = 20e3 if ((bp/tickers_left_to_invest) >= 20e3) else (bp/tickers_left_to_invest)
                     s = int((amount / trader.get_last_price(ticker)) / 100.)
                     orders_placed = place_orders(shift.Order.Type.MARKET_BUY, ticker, s)
                     # buy = shift.Order(shift.Order.Type.MARKET_BUY, ticker, s)
                     # trader.submit_order(buy)
                 
             else:
+                print("INSTANTIATING SHORT POSITION")
             # elif checker == True:
                 # prev was in uptrend, now in downtrend
                 sell_long(ticker, trader)
-                print("ATR FLIPPED, SOLD LONG")
+                print("ATR FLIPPED, SOLD LONG POSITIONS IF WE HAD ANY")
                 #sleep
                 sleep(safe_sleep)
                 #take shorts with market order
@@ -338,7 +353,7 @@ def run_volatility(ticker: str, state: Dict[str, Any], end_time, length = 20, fa
                     continue 
                 bp = trader.get_portfolio_summary().get_total_bp() - get_unrealized_short_pnl(trader) - buffer
                 if bp > 0:
-                    avail = 200e3 if ((bp/tickers_left_to_invest) > 200e3) else (bp/tickers_left_to_invest)
+                    avail = 20e3 if ((bp/tickers_left_to_invest) > 20e3) else (bp/tickers_left_to_invest)
                     amount = (avail / 2) * 0.99
                     s = int((amount / trader.get_last_price(ticker)) / 100.)
                     orders_placed = place_orders(shift.Order.Type.MARKET_SELL, ticker, s)
@@ -355,7 +370,8 @@ def run_processes(trader: shift.Trader, state: Dict[str, Any], end_time) -> List
     processes = []
 
     for ticker in tickers:
-        processes.append(Thread(target=run_volatility, args=(ticker, state, end_time, 20, 2.25)))
+        processes.append(Thread(target=run_volatility, args=(ticker, state, end_time, 20, 2.75)))
+        processes.append(Thread(target=check_pnl, args=(ticker, trader, state, end_time)))
     
     processes.append(Thread(target=routine_summary, args=(trader,end_time)))
 
