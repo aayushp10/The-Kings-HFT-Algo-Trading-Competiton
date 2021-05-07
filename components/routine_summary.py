@@ -24,7 +24,11 @@ def routine_summary(trader: shift.Trader, end_time):
         print(f"----------{trader.get_last_trade_time()}-------------")
         utils.print_all_submitted_order(trader)
         utils.print_portfolio_information(trader)
+        print("-----–ASK–-----")
+        utils.print_ask_order_book(trader)
+        print("------BID–-----")  
+        utils.print_bid_order_book(trader)
         ct = dt.datetime.now()
         print("current time:-", ct)
-        time.sleep(30)
+        time.sleep(3)
     return 0

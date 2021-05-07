@@ -92,7 +92,11 @@ def print_all_submitted_order(trader):
     print(
         "Symbol\t\t\t\tType\t  Price\t\tSize\tExecuted\tID\t\t\t\t\t\t\t\t\t\t\t\t\t\t Status\t\tTimestamp"
     )
-    for o in trader.get_submitted_orders():
+    orders = trader.get_submitted_orders()
+    if len(orders) > 10:
+        orders = orders[-10:]
+        
+    for o in orders:
         if o.status == shift.Order.Status.FILLED:
             price = o.executed_price
         else:
@@ -113,3 +117,43 @@ def print_all_submitted_order(trader):
 
     return
 
+def print_bid_order_book(trader):
+    print("  Price\t\tSize\t  Dest\t\tTime")
+    print("----------------------TRV---------------------------")
+    for order in trader.get_order_book("TRV", shift.OrderBookType.GLOBAL_BID, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
+    print("-----------------------IBM--------------------------")    
+    for order in trader.get_order_book("IBM", shift.OrderBookType.GLOBAL_BID, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
+    print("-----------------------AXP--------------------------")    
+    for order in trader.get_order_book("AXP", shift.OrderBookType.GLOBAL_BID, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
+def print_ask_order_book(trader):
+    print("  Price\t\tSize\t  Dest\t\tTime")
+    print("----------------------TRV---------------------------")
+    for order in trader.get_order_book("TRV", shift.OrderBookType.GLOBAL_ASK, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
+    print("----------------------IBM---------------------------")
+    for order in trader.get_order_book("IBM", shift.OrderBookType.GLOBAL_ASK, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
+    print("--------------------AXP-----------------------------")
+    for order in trader.get_order_book("AXP", shift.OrderBookType.GLOBAL_ASK, 10):
+        print(
+            "%7.2f\t\t%4d\t%6s\t\t%19s"
+            % (order.price, order.size, order.destination, order.time)
+        )
