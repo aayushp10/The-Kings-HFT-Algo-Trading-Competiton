@@ -129,7 +129,10 @@ def run_mm_short(ticker: str, trader: shift.Trader, end_time):
         if allocation > -portfolio_value_of_ticker:
             
             lots = 3
-            price = ask
+            if spread >= minimum_spread:
+                price = ask
+            else:
+                continue
             # if spread < minimum_spread:
             #     price += 0.01        
 
@@ -174,7 +177,10 @@ def run_mm_long(ticker: str, trader: shift.Trader, end_time):
         
         if allocation > portfolio_value_of_ticker:
             lots = 3
-            price = bid
+            if spread >= minimum_spread:
+                price = bid
+            else:
+                continue
             # if spread < minimum_spread:
             #     price -= 0.01
                 
