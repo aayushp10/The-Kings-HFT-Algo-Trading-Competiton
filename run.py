@@ -130,8 +130,8 @@ def run_mm_short(ticker: str, trader: shift.Trader, end_time):
             
             lots = 3
             price = ask
-            if spread < minimum_spread:
-                price += 0.01        
+            # if spread < minimum_spread:
+            #     price += 0.01        
 
                 
             order = place_limit_order(shift.Order.Type.LIMIT_SELL, ticker, lots, price)
@@ -175,8 +175,8 @@ def run_mm_long(ticker: str, trader: shift.Trader, end_time):
         if allocation > portfolio_value_of_ticker:
             lots = 3
             price = bid
-            if spread < minimum_spread:
-                price -= 0.01
+            # if spread < minimum_spread:
+            #     price -= 0.01
                 
             order = place_limit_order(shift.Order.Type.LIMIT_BUY, ticker, lots, price)
             status = get_order_status(order)
