@@ -93,10 +93,20 @@ def print_all_submitted_order(trader):
         "Symbol\t\t\t\tType\t  Price\t\tSize\tExecuted\tID\t\t\t\t\t\t\t\t\t\t\t\t\t\t Status\t\tTimestamp"
     )
     orders = trader.get_submitted_orders()
+    filled_orders = 0;
+    for o in orders:
+        if o.status == shift.Order.Status.FILLED or o.status == shift.Order.Status.PARTIALLY_FILLED:
+            filled_orders += 1
+    
+    print(f"Filled/Partially Filled Order : {filled_orders}")
+
     if len(orders) > 10:
         orders = orders[-10:]
         
+    
     for o in orders:
+
+        
         if o.status == shift.Order.Status.FILLED:
             price = o.executed_price
         else:
@@ -114,6 +124,8 @@ def print_all_submitted_order(trader):
                 o.timestamp,
             )
         )
+    
+
 
     return
 

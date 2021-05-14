@@ -14,18 +14,18 @@ sys.path.insert(1, '../')
 import credentials
 import datetime as dt
 import utils
-from inventory import manageInventory 
-tickers = ["IBM", "AXP"]
 
-frequency = 3
+tickers = ["DIS", "V", "MSFT", "KO"]
+
+frequency = 4
 safe_sleep = 5
 buffer = 200e3
 
 def buy_back_shorted(ticker: str, trader: shift.Trader):
 
     item = trader.get_portfolio_item(ticker)
-    while(item.get_shares() < 0):
-        orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100))
+    while(item.get_short_shares() > 0):
+        orders_placed = place_orders(shift.Order.Type.MARKET_BUY ,ticker, int(item.get_short_shares() / 100))
         sleep(10)
         item = trader.get_portfolio_item(ticker)
         print(f'submitted buy for {ticker}')
@@ -36,57 +36,17 @@ def buy_back_shorted(ticker: str, trader: shift.Trader):
 def sell_long(ticker: str, trader: shift.Trader):
     
     item = trader.get_portfolio_item(ticker)
-    while(item.get_shares() > 0):
-        orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100))
+    while(item.get_long_shares() > 0):
+        orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int(item.get_long_shares() / 100))
         sleep(10)
         item = trader.get_portfolio_item(ticker)
         # sell = shift.Order(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
         # trader.submit_order(sell)
         print(f'submitted sell for {ticker}')
 
-def buy_back_half(ticker: str, trader: shift.Trader):
+  
 
-    item = trader.get_portfolio_item(ticker)
 
-    if item.get_shares() == -100:
-        orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100))
-    else:
-        orders_placed = place_orders(shift.Order.Type.MARKET_BUY,ticker, int((-1* item.get_shares() / 100)/2))
-    sleep(10)
-
-    print(f'submitted buy for {ticker}')
-    # if item.get_shares() < 0:
-        # buy = shift.Order(shift.Order.Type.MARKET_BUY,ticker, int(-1* item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
-        # trader.submit_order(buy)
-            
-def sell_half(ticker: str, trader: shift.Trader):
-    
-    item = trader.get_portfolio_item(ticker)
-
-    if item.get_shares() == 100:
-        orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100))
-    else:
-        orders_placed = place_orders(shift.Order.Type.MARKET_SELL,ticker, int((item.get_shares() / 100)/2))
-    sleep(10)
-
-        # sell = shift.Order(shift.Order.Type.MARKET_SELL,ticker, int(item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
-        # trader.submit_order(sell)
-    print(f'submitted sell for {ticker}')    
-
-def get_unrealized_short_pnl(trader: shift.Trader):
-    total_unrealized_short_pnl = 0
-    for item, value in trader.get_portfolio_items().items():
-        if(value.get_shares() < 0):
-            total_unrealized_short_pnl += trader.get_unrealized_pl(item)
-
-    return total_unrealized_short_pnl
-
-def get_tickers_with_positions(trader: shift.Trader):
-    t = []
-    for ticker, item in trader.get_portfolio_items().items():
-        if(item.get_shares() != 0 and len(item.get_symbol()) >= 1):
-            t.append(ticker)
-    return t
 
 def place_orders(order_type: shift.Order.Type, ticker: str, size: int):
     order = shift.Order(order_type, ticker, size)
@@ -108,41 +68,6 @@ def get_prices(ticker):
 def get_order_status(order):
     return trader.get_order(order.id).status
 
-def run_mm_short(ticker: str, trader: shift.Trader, end_time):
-    minimum_spread = 0.02
-    maximum_allocation = 0.15
-    while trader.get_last_trade_time() < end_time:
-        
-        sleep(frequency)       
-
-        item = trader.get_portfolio_item(ticker)
-        shares = item.get_shares()
-        ask,bid,mid = get_prices(ticker)
-        if int(ask) == 0 or int(bid) == 0:
-            continue
-
-        spread = (ask-bid)
-        
-        portfolio_value_of_ticker = shares*mid
-        allocation = maximum_allocation*1000000
-        
-        if allocation > -portfolio_value_of_ticker:
-            
-            lots = 3
-            if spread >= minimum_spread:
-                price = ask
-            else:
-                continue
-            # if spread < minimum_spread:
-            #     price += 0.01        
-
-                
-            order = place_limit_order(shift.Order.Type.LIMIT_SELL, ticker, lots, price)
-            check_order(order, trader)
-
-        else: 
-            continue
-
 def check_order(order, trader: shift.Trader):
     sleep(1)
     status = get_order_status(order)
@@ -154,17 +79,50 @@ def check_order(order, trader: shift.Trader):
     if status != shift.Order.Status.REJECTED and status != shift.Order.Status.FILLED:
         trader.submit_cancellation(order)
 
+def run_mm_short(ticker: str, trader: shift.Trader, end_time):
+    minimum_spread = 0.02
+    maximum_allocation = 0.1
+    while trader.get_last_trade_time() < end_time:
+        
+        sleep(frequency)       
+
+        item = trader.get_portfolio_item(ticker)
+        short_shares = item.get_short_shares()
+        ask,bid,mid = get_prices(ticker)
+        if int(ask) == 0 or int(bid) == 0:
+            continue
+
+        spread = (ask-bid)
+        
+        portfolio_value_of_ticker = (short_shares*mid)
+        allocation = maximum_allocation*1000000
+        
+        if allocation > portfolio_value_of_ticker:
+            
+            lots = 3
+            price=ask
+            if spread < minimum_spread:
+                price += 0.01
+                
+            order = place_limit_order(shift.Order.Type.LIMIT_SELL, ticker, lots, price)
+            check_order(order, trader)
+
+        else: 
+            continue
+
+
+
 def run_mm_long(ticker: str, trader: shift.Trader, end_time):
     
     minimum_spread = 0.02
-    maximum_allocation = 0.15
+    maximum_allocation = 0.1
 
     while trader.get_last_trade_time() < end_time:
         
         sleep(frequency)       
 
         item = trader.get_portfolio_item(ticker)
-        shares = item.get_shares()
+        long_shares = item.get_long_shares()
         ask,bid,mid = get_prices(ticker)
 
         if bid == 0 or ask == 0:
@@ -172,17 +130,14 @@ def run_mm_long(ticker: str, trader: shift.Trader, end_time):
 
         spread = (ask-bid)
         
-        portfolio_value_of_ticker = shares*mid
+        portfolio_value_of_ticker = long_shares*mid
         allocation = maximum_allocation*1000000
         
         if allocation > portfolio_value_of_ticker:
             lots = 3
-            if spread >= minimum_spread:
-                price = bid
-            else:
-                continue
-            # if spread < minimum_spread:
-            #     price -= 0.01
+            price=bid
+            if spread < minimum_spread:
+                price -= 0.01
                 
             order = place_limit_order(shift.Order.Type.LIMIT_BUY, ticker, lots, price)
             status = get_order_status(order)
@@ -194,12 +149,21 @@ def get_unrealized_pl(ticker: str, trader: shift.Trader):
 
     p = trader.get_last_price(ticker)
     item = trader.get_portfolio_item(ticker)
-    upl = -1 if item.get_shares() < 0 else 1
-    currValue = item.get_shares() * p
-    cost = item.get_shares() * item.get_price()
-    if cost == 0:
-        return 0
-    upl = upl*((currValue - cost)/cost)
+    long_shares = item.get_long_shares()
+    short_shares = item.get_short_shares()
+    upl = 0
+
+    curr_long_value = long_shares * p
+    cost_long = long_shares * item.get_long_price()
+    curr_short_value = short_shares * p
+    cost_short = short_shares * item.get_short_price()
+
+    
+    if cost_long != 0:
+        upl += (curr_long_value - cost_long)/float(cost_long)
+    if cost_short != 0:
+        upl -= (curr_short_value - cost_short)/float(cost_short)
+
     return upl
 
 def manage_inventory(ticker: str, trader: shift.Trader, end_time):
@@ -207,13 +171,13 @@ def manage_inventory(ticker: str, trader: shift.Trader, end_time):
         sleep(frequency)
         upl = get_unrealized_pl(ticker, trader)
         item = trader.get_portfolio_item(ticker)
-        if int(item.get_price()) != 0:
-            if upl >= 0.4 or upl <= -0.2:
-                print(f"Closing positions on {ticker} for {'loss' if upl <= -0.2 else 'profit'}")
-                if item.get_shares() > 0:
-                    sell_long(ticker)
-                elif item.get_shares() < 0:
-                    buy_back_shorted(ticker)
+        print(f"UPL {ticker} = {upl}")
+        if upl >= 0.004 or upl <= -0.002:
+            print(f"Closing positions on {ticker} for {upl} {'loss' if upl <= -0.002 else 'pofit'}")
+            if item.get_long_shares() > 0:
+                sell_long(ticker, trader)
+            if item.get_short_shares() > 0:
+                buy_back_shorted(ticker, trader)
 
 def run_processes(trader: shift.Trader, end_time) -> List[Thread]:
     """
@@ -249,14 +213,13 @@ def main(trader):
     start_time = datetime.combine(current, dt.time(10,0,0))
     end_time = datetime.combine(current, dt.time(15,30,0))
 
-
     processes = []
-
 
     while trader.get_last_trade_time() < start_time:
 
         print(f"Checking for market open at {trader.get_last_trade_time()}")
         sleep(check_frequency)
+
 
     processes.extend(run_processes(trader, end_time))
 
@@ -273,7 +236,7 @@ def main(trader):
     
     for t in tickers:
         item = trader.get_portfolio_item(t)
-        if item.get_shares() > 0:
+        if item.get_long_shares() > 0:
             # orders_placed = place_orders(shift.Order.Type.MARKET_SELL, t, int(item.get_shares() / 100))
             # # sell = shift.Order(shift.Order.Type.MARKET_SELL,t, int(item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
             # # trader.submit_order(sell)
@@ -284,7 +247,7 @@ def main(trader):
     sleep(10)
     for t in tickers:
         item = trader.get_portfolio_item(t)
-        if item.get_shares() < 0:
+        if item.get_short_shares() > 0:
             # orders_placed = place_orders(shift.Order.Type.MARKET_BUY, t, int(-1* item.get_shares() / 100))
             # buy = shift.Order(shift.Order.Type.MARKET_BUY,t, int(-1* item.get_shares() / 100)) # Order size in 100's of shares, strictly as an int
             # trader.submit_order(buy)
